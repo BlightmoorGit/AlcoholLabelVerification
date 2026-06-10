@@ -8,9 +8,10 @@ https://alcohollabelverification-production-0201.up.railway.app
 How to Use
 
 1. Go to the link above
-2. Click "Upload and Check Label" or drag and drop an image of an alcohol label
-3. Wait for the system to process the image
-4. Review the Pass/Fail result along with the detailed breakdown of detected requirements
+2. Find Github file named "genericPracticeLabel.jpg"
+3. Click "Upload and Check Label" or drag and drop image file named "genericPracticeLabel.jpg"
+4. Wait for the system to process the image
+5. Review the Pass/Fail result along with the detailed breakdown of detected requirements
 
 Technical Approach & Tools Used
 
