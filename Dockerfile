@@ -26,19 +26,28 @@ RUN apt-get update \
 
 # Create compatibility symlinks for native library filenames some NuGet packages expect
 # (e.g. libleptonica-1.82.0.so). If the distro provides a differently-named .so, link it.
-RUN ldconfig && \
-	for f in /usr/lib/x86_64-linux-gnu/libleptonica*.so* /usr/lib/libleptonica*.so*; do \
+RUN set -eux; \
+	ldconfig || true; \
+	mkdir -p /usr/lib/x86_64-linux-gnu; \
+	# Link libleptonica to expected name if a compatible file exists
+	for f in /usr/lib/x86_64-linux-gnu/libleptonica*.so* /usr/lib/libleptonica*.so* /usr/local/lib/libleptonica*.so*; do \
 	  if [ -e "$f" ]; then \
 		ln -sf "$f" /usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so; \
 		break; \
 	  fi; \
-	done && \
-	for f in /usr/lib/x86_64-linux-gnu/libtesseract*.so* /usr/lib/libtesseract*.so*; do \
+	done; \
+	# Link libtesseract to an expected name
+	for f in /usr/lib/x86_64-linux-gnu/libtesseract*.so* /usr/lib/libtesseract*.so* /usr/local/lib/libtesseract*.so*; do \
 	  if [ -e "$f" ]; then \
 		ln -sf "$f" /usr/lib/x86_64-linux-gnu/libtesseract50.so; \
 		break; \
 	  fi; \
-	done || true
+	done; \
+	ldconfig || true
+
+# Ensure Tesseract can find traineddata and native loader can find libraries
+ENV TESSDATA_PREFIX=/app/tessdata
+ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}
 
 COPY --from=build /app/publish .
 
