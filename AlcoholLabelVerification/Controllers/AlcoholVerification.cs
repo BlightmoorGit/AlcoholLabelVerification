@@ -54,7 +54,7 @@ namespace AlcoholLabelVerification.Controllers
         }
         [HttpPost("verify")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> Verify(IFormFile image)
+        public async Task<IActionResult> Verify(IFormFile image) // no-op save
         {
             if (image == null || image.Length == 0)
             {
@@ -131,11 +131,60 @@ namespace AlcoholLabelVerification.Controllers
             {
                 // swallow preload errors; next steps will surface meaningful exception
             }
+            string extractedText = string.Empty;
+            float meanConfidence = 0f;
 
-            using var engine = new TesseractEngine("./tessdata", "eng", EngineMode.Default);
-            using var img = Pix.LoadFromMemory(imageBytes);
-            using var page = engine.Process(img);
-            string extractedText = page.GetText() ?? string.Empty;
+            // Prefer calling the tesseract CLI binary (avoids managed native binding issues).
+            try
+            {
+                var tmpFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".jpg");
+                System.IO.File.WriteAllBytes(tmpFile, imageBytes);
+                try
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "tesseract",
+                        Arguments = $"\"{tmpFile}\" stdout -l eng",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    using (var proc = System.Diagnostics.Process.Start(psi))
+                    {
+                        var outp = proc.StandardOutput.ReadToEnd();
+                        var err = proc.StandardError.ReadToEnd();
+                        proc.WaitForExit(15000);
+                        extractedText = (outp ?? string.Empty).Trim();
+                        if (string.IsNullOrWhiteSpace(extractedText) && !string.IsNullOrWhiteSpace(err))
+                        {
+                            // include stderr for diagnostics if stdout empty
+                            extractedText = err.Trim();
+                        }
+                    }
+                }
+                finally
+                {
+                    try { System.IO.File.Delete(tmpFile); } catch { }
+                }
+            }
+            catch
+            {
+                // fallback to managed Tesseract bindings if CLI not available or failed
+                try
+                {
+                    using var engine = new TesseractEngine("./tessdata", "eng", EngineMode.Default);
+                    using var img = Pix.LoadFromMemory(imageBytes);
+                    using var page = engine.Process(img);
+                    extractedText = page.GetText() ?? string.Empty;
+                    meanConfidence = page.GetMeanConfidence();
+                }
+                catch (Exception ex)
+                {
+                    // surface detailed error for debugging
+                    return StatusCode(500, $"Error initializing Tesseract (managed): {ex}");
+                }
+            }
             var lines = extractedText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
 
             //ttb checks for specific keywords
