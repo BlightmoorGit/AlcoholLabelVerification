@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Tesseract;
+// using Tesseract managed bindings removed to avoid native loader issues; we use tesseract CLI instead
 using System.Runtime.InteropServices;
 
 namespace AlcoholLabelVerification.Controllers
@@ -135,55 +135,37 @@ namespace AlcoholLabelVerification.Controllers
             float meanConfidence = 0f;
 
             // Prefer calling the tesseract CLI binary (avoids managed native binding issues).
+            // Use tesseract CLI to avoid in-process native binding issues.
+            var tmpFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".jpg");
             try
             {
-                var tmpFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".jpg");
                 System.IO.File.WriteAllBytes(tmpFile, imageBytes);
-                try
+                var psi = new System.Diagnostics.ProcessStartInfo
                 {
-                    var psi = new System.Diagnostics.ProcessStartInfo
+                    FileName = "tesseract",
+                    Arguments = $"\"{tmpFile}\" stdout -l eng",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using (var proc = System.Diagnostics.Process.Start(psi))
+                {
+                    var outp = proc.StandardOutput.ReadToEnd();
+                    var err = proc.StandardError.ReadToEnd();
+                    proc.WaitForExit(15000);
+                    extractedText = (outp ?? string.Empty).Trim();
+                    if (string.IsNullOrWhiteSpace(extractedText))
                     {
-                        FileName = "tesseract",
-                        Arguments = $"\"{tmpFile}\" stdout -l eng",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    };
-                    using (var proc = System.Diagnostics.Process.Start(psi))
-                    {
-                        var outp = proc.StandardOutput.ReadToEnd();
-                        var err = proc.StandardError.ReadToEnd();
-                        proc.WaitForExit(15000);
-                        extractedText = (outp ?? string.Empty).Trim();
-                        if (string.IsNullOrWhiteSpace(extractedText) && !string.IsNullOrWhiteSpace(err))
-                        {
-                            // include stderr for diagnostics if stdout empty
-                            extractedText = err.Trim();
-                        }
+                        // If CLI produced no stdout, return stderr for diagnostics
+                        if (!string.IsNullOrWhiteSpace(err))
+                            return StatusCode(500, $"Tesseract CLI error: {err}");
                     }
                 }
-                finally
-                {
-                    try { System.IO.File.Delete(tmpFile); } catch { }
-                }
             }
-            catch
+            finally
             {
-                // fallback to managed Tesseract bindings if CLI not available or failed
-                try
-                {
-                    using var engine = new TesseractEngine("./tessdata", "eng", EngineMode.Default);
-                    using var img = Pix.LoadFromMemory(imageBytes);
-                    using var page = engine.Process(img);
-                    extractedText = page.GetText() ?? string.Empty;
-                    meanConfidence = page.GetMeanConfidence();
-                }
-                catch (Exception ex)
-                {
-                    // surface detailed error for debugging
-                    return StatusCode(500, $"Error initializing Tesseract (managed): {ex}");
-                }
+                try { System.IO.File.Delete(tmpFile); } catch { }
             }
             var lines = extractedText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
 
@@ -397,7 +379,7 @@ namespace AlcoholLabelVerification.Controllers
             {
                 Status = overallPass ? "Pass" : "Fail",
                 ExtractedText = extractedText.Trim(),
-                Confidence = page.GetMeanConfidence(),
+                Confidence = meanConfidence,
                 Requirements = requirements,
                 FailedReasons = failed,
                 KeywordsTriggered = new
