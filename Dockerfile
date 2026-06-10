@@ -24,6 +24,22 @@ RUN apt-get update \
 	   ca-certificates \
 	&& rm -rf /var/lib/apt/lists/*
 
+# Create compatibility symlinks for native library filenames some NuGet packages expect
+# (e.g. libleptonica-1.82.0.so). If the distro provides a differently-named .so, link it.
+RUN ldconfig && \
+	for f in /usr/lib/x86_64-linux-gnu/libleptonica*.so* /usr/lib/libleptonica*.so*; do \
+	  if [ -e "$f" ]; then \
+		ln -sf "$f" /usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so; \
+		break; \
+	  fi; \
+	done && \
+	for f in /usr/lib/x86_64-linux-gnu/libtesseract*.so* /usr/lib/libtesseract*.so*; do \
+	  if [ -e "$f" ]; then \
+		ln -sf "$f" /usr/lib/x86_64-linux-gnu/libtesseract50.so; \
+		break; \
+	  fi; \
+	done || true
+
 COPY --from=build /app/publish .
 
 # Let the container bind to the PORT variable Railway provides at runtime
