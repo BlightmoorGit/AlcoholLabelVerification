@@ -33,6 +33,72 @@ namespace AlcoholLabelVerification.Controllers
                                     var files = Directory.GetFiles(r, pat, SearchOption.TopDirectoryOnly);
                                     foreach (var f in files) found.Add(f);
                                 }
+
+        [HttpGet("debugld")]
+        public IActionResult DebugLdd()
+        {
+            try
+            {
+                var probes = new[] { "/usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so", "/lib/x86_64-linux-gnu/libleptonica-1.82.0.so", "/usr/lib/x86_64-linux-gnu/libtesseract50.so", "/lib/x86_64-linux-gnu/libtesseract50.so" };
+                var results = new System.Collections.Generic.List<object>();
+                foreach (var p in probes)
+                {
+                    if (System.IO.File.Exists(p))
+                    {
+                        try
+                        {
+                            var psi = new System.Diagnostics.ProcessStartInfo
+                            {
+                                FileName = "ldd",
+                                Arguments = p,
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true,
+                                UseShellExecute = false,
+                                CreateNoWindow = true
+                            };
+                            using var proc = System.Diagnostics.Process.Start(psi);
+                            string outp = proc.StandardOutput.ReadToEnd();
+                            string err = proc.StandardError.ReadToEnd();
+                            proc.WaitForExit(3000);
+                            results.Add(new { Path = p, Exists = true, LddOut = outp.Trim(), LddErr = err.Trim() });
+                        }
+                        catch (Exception ex)
+                        {
+                            results.Add(new { Path = p, Exists = true, Error = ex.ToString() });
+                        }
+                    }
+                    else
+                    {
+                        results.Add(new { Path = p, Exists = false });
+                    }
+                }
+
+                // show ldconfig cache entries for libleptonica / tesseract
+                string ldconfigOut = string.Empty;
+                try
+                {
+                    var psi2 = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "sh",
+                        Arguments = "-c \"ldconfig -p | egrep 'libleptonica|libtesseract' || true\"",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    using var p2 = System.Diagnostics.Process.Start(psi2);
+                    ldconfigOut = p2.StandardOutput.ReadToEnd().Trim();
+                    p2.WaitForExit(2000);
+                }
+                catch { }
+
+                return Ok(new { Probes = results, Ldconfig = ldconfigOut });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.ToString());
+            }
+        }
                                 catch { }
                             }
                         }
