@@ -47,7 +47,7 @@ RUN set -eux; \
 
 # Ensure Tesseract can find traineddata and native loader can find libraries
 ENV TESSDATA_PREFIX=/app/tessdata
-ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/lib
 
 COPY --from=build /app/publish .
 
