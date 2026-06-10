@@ -21,10 +21,10 @@ RUN apt-get update \
 	   libleptonica-dev \
 	   libpng-dev \
 	   libjpeg-dev \
-	   libtiff5 \
-	   libwebp6 \
+	   libtiff-dev \
+	   libwebp-dev \
 	   libopenjp2-7 \
-	   libgif7 \
+	   libgif-dev \
 	   zlib1g \
 	   ca-certificates \
 	&& rm -rf /var/lib/apt/lists/*
