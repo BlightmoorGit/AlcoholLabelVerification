@@ -1,0 +1,15 @@
+bin/
+obj/
+**/*.user
+.vscode/
+.env
+*.local
+*.suo
+*.user
+
+# NuGet packages
+**/packages/*
+
+# OS files
+.DS_Store
+Thumbs.db
