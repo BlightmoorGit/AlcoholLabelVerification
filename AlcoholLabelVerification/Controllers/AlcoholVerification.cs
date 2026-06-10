@@ -12,6 +12,45 @@ namespace AlcoholLabelVerification.Controllers
     [Route("api/[controller]")]
     public class AlcoholVerificationController : ControllerBase
     {
+        // Debug endpoint to list native libraries and tessdata presence inside the container
+        [HttpGet("debuglibs")]
+        public IActionResult DebugLibs()
+        {
+            try
+            {
+                var roots = new[] { "/usr/lib", "/usr/lib/x86_64-linux-gnu", "/lib", "/lib/x86_64-linux-gnu", Directory.GetCurrentDirectory() };
+                var found = new System.Collections.Generic.List<string>();
+                foreach (var r in roots)
+                {
+                    try
+                    {
+                        if (Directory.Exists(r))
+                        {
+                            foreach (var pat in new[] { "libleptonica*.so*", "libtesseract*.so*", "libpng*.so*", "libjpeg*.so*" })
+                            {
+                                try
+                                {
+                                    var files = Directory.GetFiles(r, pat, SearchOption.TopDirectoryOnly);
+                                    foreach (var f in files) found.Add(f);
+                                }
+                                catch { }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                var tessdataDir = Path.Combine(Directory.GetCurrentDirectory(), "tessdata");
+                var tessFiles = new string[0];
+                if (Directory.Exists(tessdataDir)) tessFiles = Directory.GetFiles(tessdataDir).Select(p => Path.GetFileName(p)).ToArray();
+
+                return Ok(new { Cwd = Directory.GetCurrentDirectory(), Roots = roots, Found = found.Distinct().ToArray(), TessdataExists = Directory.Exists(tessdataDir), TessdataFiles = tessFiles });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.ToString());
+            }
+        }
         [HttpPost("verify")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> Verify(IFormFile image)
