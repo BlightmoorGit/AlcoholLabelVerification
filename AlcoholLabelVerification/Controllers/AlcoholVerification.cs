@@ -5,6 +5,7 @@ using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Tesseract;
+using System.Runtime.InteropServices;
 
 namespace AlcoholLabelVerification.Controllers
 {
@@ -33,72 +34,6 @@ namespace AlcoholLabelVerification.Controllers
                                     var files = Directory.GetFiles(r, pat, SearchOption.TopDirectoryOnly);
                                     foreach (var f in files) found.Add(f);
                                 }
-
-        [HttpGet("debugld")]
-        public IActionResult DebugLdd()
-        {
-            try
-            {
-                var probes = new[] { "/usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so", "/lib/x86_64-linux-gnu/libleptonica-1.82.0.so", "/usr/lib/x86_64-linux-gnu/libtesseract50.so", "/lib/x86_64-linux-gnu/libtesseract50.so" };
-                var results = new System.Collections.Generic.List<object>();
-                foreach (var p in probes)
-                {
-                    if (System.IO.File.Exists(p))
-                    {
-                        try
-                        {
-                            var psi = new System.Diagnostics.ProcessStartInfo
-                            {
-                                FileName = "ldd",
-                                Arguments = p,
-                                RedirectStandardOutput = true,
-                                RedirectStandardError = true,
-                                UseShellExecute = false,
-                                CreateNoWindow = true
-                            };
-                            using var proc = System.Diagnostics.Process.Start(psi);
-                            string outp = proc.StandardOutput.ReadToEnd();
-                            string err = proc.StandardError.ReadToEnd();
-                            proc.WaitForExit(3000);
-                            results.Add(new { Path = p, Exists = true, LddOut = outp.Trim(), LddErr = err.Trim() });
-                        }
-                        catch (Exception ex)
-                        {
-                            results.Add(new { Path = p, Exists = true, Error = ex.ToString() });
-                        }
-                    }
-                    else
-                    {
-                        results.Add(new { Path = p, Exists = false });
-                    }
-                }
-
-                // show ldconfig cache entries for libleptonica / tesseract
-                string ldconfigOut = string.Empty;
-                try
-                {
-                    var psi2 = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "sh",
-                        Arguments = "-c \"ldconfig -p | egrep 'libleptonica|libtesseract' || true\"",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    };
-                    using var p2 = System.Diagnostics.Process.Start(psi2);
-                    ldconfigOut = p2.StandardOutput.ReadToEnd().Trim();
-                    p2.WaitForExit(2000);
-                }
-                catch { }
-
-                return Ok(new { Probes = results, Ldconfig = ldconfigOut });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, ex.ToString());
-            }
-        }
                                 catch { }
                             }
                         }
@@ -143,6 +78,60 @@ namespace AlcoholLabelVerification.Controllers
 
         private IActionResult ProcessImageBytes(byte[] imageBytes)
         {
+            // Attempt to preload native libraries from common locations so the Tesseract bindings can find them.
+            try
+            {
+                var tried = new System.Collections.Generic.List<string>();
+                var candidates = new[] {
+                    "/app/libleptonica-1.82.0.so",
+                    "/usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so",
+                    "/lib/x86_64-linux-gnu/libleptonica-1.82.0.so",
+                    "/usr/lib/x86_64-linux-gnu/libleptonica.so",
+                    "/lib/x86_64-linux-gnu/libleptonica.so"
+                };
+                foreach (var c in candidates)
+                {
+                    try
+                    {
+                        if (System.IO.File.Exists(c))
+                        {
+                            tried.Add(c);
+                            if (NativeLibrary.TryLoad(c, out var h))
+                            {
+                                // keep handle alive until method end
+                                // no-op; successful load helps the interop resolver
+                                break;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+                // Try tesseract native too
+                var tCandidates = new[] {
+                    "/app/libtesseract50.so",
+                    "/usr/lib/x86_64-linux-gnu/libtesseract50.so",
+                    "/lib/x86_64-linux-gnu/libtesseract50.so",
+                    "/usr/lib/x86_64-linux-gnu/libtesseract.so",
+                    "/lib/x86_64-linux-gnu/libtesseract.so"
+                };
+                foreach (var c in tCandidates)
+                {
+                    try
+                    {
+                        if (System.IO.File.Exists(c))
+                        {
+                            tried.Add(c);
+                            if (NativeLibrary.TryLoad(c, out var h)) break;
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch
+            {
+                // swallow preload errors; next steps will surface meaningful exception
+            }
+
             using var engine = new TesseractEngine("./tessdata", "eng", EngineMode.Default);
             using var img = Pix.LoadFromMemory(imageBytes);
             using var page = engine.Process(img);
