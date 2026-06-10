@@ -30,7 +30,9 @@ namespace AlcoholLabelVerification.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Error processing image: {ex.Message}");
+                // Return full exception details to aid debugging (includes inner exception / stack trace)
+                // In production you may want to log this instead of returning the full text to clients.
+                return StatusCode(500, $"Error processing image: {ex}");
             }
         }
 
