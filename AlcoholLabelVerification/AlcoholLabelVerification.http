@@ -1,4 +1,4 @@
-@AlcoholLabelVerification_HostAddress = https://alcohol-label-verifier-production-e742.up.railway.app
+@AlcoholLabelVerification_HostAddress = https://alcohollabelverification-production-0201.up.railway.app
 
 GET {{AlcoholLabelVerification_HostAddress}}/weatherforecast/
 Accept: application/json
