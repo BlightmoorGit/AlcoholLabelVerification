@@ -4,8 +4,6 @@ using System.Threading.Tasks;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-// using Tesseract managed bindings removed to avoid native loader issues; we use tesseract CLI instead
-using System.Runtime.InteropServices;
 
 namespace AlcoholLabelVerification.Controllers
 {
@@ -13,45 +11,7 @@ namespace AlcoholLabelVerification.Controllers
     [Route("api/[controller]")]
     public class AlcoholVerificationController : ControllerBase
     {
-        // Debug endpoint to list native libraries and tessdata presence inside the container
-        [HttpGet("debuglibs")]
-        public IActionResult DebugLibs()
-        {
-            try
-            {
-                var roots = new[] { "/usr/lib", "/usr/lib/x86_64-linux-gnu", "/lib", "/lib/x86_64-linux-gnu", Directory.GetCurrentDirectory() };
-                var found = new System.Collections.Generic.List<string>();
-                foreach (var r in roots)
-                {
-                    try
-                    {
-                        if (Directory.Exists(r))
-                        {
-                            foreach (var pat in new[] { "libleptonica*.so*", "libtesseract*.so*", "libpng*.so*", "libjpeg*.so*" })
-                            {
-                                try
-                                {
-                                    var files = Directory.GetFiles(r, pat, SearchOption.TopDirectoryOnly);
-                                    foreach (var f in files) found.Add(f);
-                                }
-                                catch { }
-                            }
-                        }
-                    }
-                    catch { }
-                }
-
-                var tessdataDir = Path.Combine(Directory.GetCurrentDirectory(), "tessdata");
-                var tessFiles = new string[0];
-                if (Directory.Exists(tessdataDir)) tessFiles = Directory.GetFiles(tessdataDir).Select(p => Path.GetFileName(p)).ToArray();
-
-                return Ok(new { Cwd = Directory.GetCurrentDirectory(), Roots = roots, Found = found.Distinct().ToArray(), TessdataExists = Directory.Exists(tessdataDir), TessdataFiles = tessFiles });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, ex.ToString());
-            }
-        }
+        // Debug endpoints removed for production readiness.
         [HttpPost("verify")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> Verify(IFormFile image) // no-op save
@@ -79,58 +39,7 @@ namespace AlcoholLabelVerification.Controllers
         private IActionResult ProcessImageBytes(byte[] imageBytes)
         {
             // Attempt to preload native libraries from common locations so the Tesseract bindings can find them.
-            try
-            {
-                var tried = new System.Collections.Generic.List<string>();
-                var candidates = new[] {
-                    "/app/libleptonica-1.82.0.so",
-                    "/usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so",
-                    "/lib/x86_64-linux-gnu/libleptonica-1.82.0.so",
-                    "/usr/lib/x86_64-linux-gnu/libleptonica.so",
-                    "/lib/x86_64-linux-gnu/libleptonica.so"
-                };
-                foreach (var c in candidates)
-                {
-                    try
-                    {
-                        if (System.IO.File.Exists(c))
-                        {
-                            tried.Add(c);
-                            if (NativeLibrary.TryLoad(c, out var h))
-                            {
-                                // keep handle alive until method end
-                                // no-op; successful load helps the interop resolver
-                                break;
-                            }
-                        }
-                    }
-                    catch { }
-                }
-                // Try tesseract native too
-                var tCandidates = new[] {
-                    "/app/libtesseract50.so",
-                    "/usr/lib/x86_64-linux-gnu/libtesseract50.so",
-                    "/lib/x86_64-linux-gnu/libtesseract50.so",
-                    "/usr/lib/x86_64-linux-gnu/libtesseract.so",
-                    "/lib/x86_64-linux-gnu/libtesseract.so"
-                };
-                foreach (var c in tCandidates)
-                {
-                    try
-                    {
-                        if (System.IO.File.Exists(c))
-                        {
-                            tried.Add(c);
-                            if (NativeLibrary.TryLoad(c, out var h)) break;
-                        }
-                    }
-                    catch { }
-                }
-            }
-            catch
-            {
-                // swallow preload errors; next steps will surface meaningful exception
-            }
+            // Using tesseract CLI; no native preload required.
             string extractedText = string.Empty;
             float meanConfidence = 0f;
 
