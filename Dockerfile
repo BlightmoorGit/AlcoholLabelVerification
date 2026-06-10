@@ -51,6 +51,16 @@ ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:/usr/local/l
 
 COPY --from=build /app/publish .
 
+# Copy critical native .so files into the app folder so the managed loader can find them reliably
+# (some native loaders prefer files next to the executable; copying avoids loader search issues)
+RUN set -eux; \
+	for f in /usr/lib/x86_64-linux-gnu/libleptonica-1.82.0.so* /lib/x86_64-linux-gnu/libleptonica-1.82.0.so*; do \
+	  if [ -e "$f" ]; then cp -L "$f" /app/ || true; fi; \
+	done; \
+	for f in /usr/lib/x86_64-linux-gnu/libtesseract50.so* /lib/x86_64-linux-gnu/libtesseract50.so*; do \
+	  if [ -e "$f" ]; then cp -L "$f" /app/ || true; fi; \
+	done; \
+	ls -l /app | sed -n '1,200p'
 # Let the container bind to the PORT variable Railway provides at runtime
 EXPOSE 80
 # Use a shell entry so the runtime PORT value provided by Railway is expanded into ASPNETCORE_URLS
