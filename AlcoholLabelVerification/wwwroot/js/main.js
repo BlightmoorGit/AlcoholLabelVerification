@@ -32,7 +32,7 @@ async function uploadImage() {
 
     try {
         console.log('sending fetch to /api/AlcoholVerification/verify');
-        const resp = await fetch('/api/AlcoholVerification/verify', { method: 'POST', body: formData });
+        const resp = await fetch('/api/AlcoholVerification/verify', { method: 'POST', body: formData, headers: { 'Accept': 'application/json' } });
         console.log('fetch response', resp.status, resp.ok);
         if (!resp.ok) {
             const text = await resp.text().catch(() => null);
@@ -41,8 +41,22 @@ async function uploadImage() {
             if (resultsDiv) resultsDiv.innerHTML = `<div style="color:#721c24;padding:12px">${statusText}</div>`;
             return;
         }
-        const json = await resp.json().catch(e => null);
-        console.log('response json', json);
+
+        // Try to parse JSON; fall back to raw text for diagnostics if parsing fails
+        let json = null;
+        try {
+            json = await resp.json();
+            console.log('response json', json);
+        } catch (parseErr) {
+            const text = await resp.text().catch(() => null);
+            console.warn('Failed to parse JSON response; falling back to text', parseErr, text);
+            if (resultsDiv) {
+                const safe = (s) => (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                resultsDiv.innerHTML = `<div style="padding:12px">Server returned non-JSON response:<pre style="white-space:pre-wrap;background:#f7f7f7;padding:8px;border-radius:3px">${safe(text) || safe(String(parseErr))}</pre></div>`;
+            }
+            return;
+        }
+
         if (resultsDiv) {
             if (!json) {
                 resultsDiv.innerHTML = '<div style="padding:12px">No JSON returned from server.</div>';
